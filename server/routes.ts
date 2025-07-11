@@ -4,60 +4,65 @@ import { storage } from "./storage";
 import { insertOrderSchema } from "@shared/schema";
 import { z } from "zod";
 
+// Import your new route modules
+import chokepoints from "./routes/chokepoints";
+import location from "./routes/location";
+import order from "./routes/order";
+
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Get all products
+  // ✅ Register chokepoint/location/order APIs
+  app.use("/api/chokepoints", chokepoints);
+  app.use("/api/location", location);
+  app.use("/api/order", order);
+
+  // ✅ Register original product routes
   app.get("/api/products", async (req, res) => {
     try {
       const products = await storage.getProducts();
       res.json(products);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch products" });
     }
   });
 
-  // Get products by category
   app.get("/api/products/category/:category", async (req, res) => {
     try {
-      const { category } = req.params;
-      const products = await storage.getProductsByCategory(category);
+      const products = await storage.getProductsByCategory(req.params.category);
       res.json(products);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch products by category" });
     }
   });
 
-  // Search products
   app.get("/api/products/search", async (req, res) => {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string') {
+      return res.status(400).json({ error: "Search query is required" });
+    }
+
     try {
-      const { q } = req.query;
-      if (!q || typeof q !== 'string') {
-        return res.status(400).json({ error: "Search query is required" });
-      }
       const products = await storage.searchProducts(q);
       res.json(products);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to search products" });
     }
   });
 
-  // Get single product
   app.get("/api/products/:id", async (req, res) => {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid product ID" });
+    }
+
     try {
-      const id = parseInt(req.params.id);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid product ID" });
-      }
       const product = await storage.getProduct(id);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
+      if (!product) return res.status(404).json({ error: "Product not found" });
       res.json(product);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch product" });
     }
   });
 
-  // Create order
   app.post("/api/orders", async (req, res) => {
     try {
       const orderData = insertOrderSchema.parse(req.body);
@@ -71,16 +76,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get order by number
   app.get("/api/orders/:orderNumber", async (req, res) => {
     try {
-      const { orderNumber } = req.params;
-      const order = await storage.getOrderByNumber(orderNumber);
-      if (!order) {
-        return res.status(404).json({ error: "Order not found" });
-      }
+      const order = await storage.getOrderByNumber(req.params.orderNumber);
+      if (!order) return res.status(404).json({ error: "Order not found" });
       res.json(order);
-    } catch (error) {
+    } catch {
       res.status(500).json({ error: "Failed to fetch order" });
     }
   });
